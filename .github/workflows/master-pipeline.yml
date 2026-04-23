@@ -36,8 +36,10 @@ jobs:
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
-          # Corremos Karate. El output se guarda en target/karate-reports
-          java -jar karate.jar tests-karate/smoke-test.feature || echo "Karate falló, seguimos..."
+          
+          # Corremos Karate indicando que la salida sea formato Cucumber JSON
+          # (Allure Docker Service sabe convertir Cucumber JSON a Allure automáticamente)
+          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate-json
 
       - name: 📊 7. Unificar y Enviar a Allure
         if: always()
@@ -70,3 +72,6 @@ jobs:
           else:
               print('No se encontraron archivos de resultados.')
           EOF
+
+      - name: 📂 Ver qué resultados hay
+        run: ls -R allure-results/
