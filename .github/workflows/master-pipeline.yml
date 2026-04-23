@@ -24,13 +24,9 @@ jobs:
         
         run: newman run tests-postman/smoke-test.json -r allure --reporter-allure-export allure-results
 
-      - name: 📊 5. Enviar Resultados a Allure Docker
+      - name: 📊 5. Enviar Resultados a Allure
         if: always()
-        
         run: |
-          echo "Enviando resultados al servidor Allure en el puerto 5050..."
-          # Aquí comprimimos y enviamos vía API (Asegurate que la IP sea la de tu Allure)
-          curl -X POST "http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default" \
-          -H "Content-Type: application/json" \
-          -d "{\"results\": []}" 
-          # Nota: Para un flujo real usaremos un script de carga, pero para probar que el runner funciona, esto basta.
+          # Instalamos una herramienta rápida para mandar los resultados
+          npm install -g allure-docker-service-cli
+          allure-docker-service-cli upload -s http://192.168.18.9:5050 -p default -r allure-results
