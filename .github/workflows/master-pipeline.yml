@@ -19,8 +19,19 @@ jobs:
         run: npm install newman newman-reporter-allure
         
       - name: 🧪 4. Ejecutar Pruebas
-        # Usamos npx para asegurar que encuentre el ejecutable
-        run: npx newman run tests-postman/smoke-test.json -r allure --reporter-allure-export allure-results || echo "Falló el test pero seguimos"
+        # Agregamos --timeout-request para que no se quede colgado 2 minutos si falla
+        run: |
+          npx newman run tests-postman/smoke-test.json \
+          --timeout-request 5000 \
+          -r allure \
+          --reporter-allure-export allure-results || echo "Tests fallidos, reportando..."
 
-      - name: 📊 5. Debug de Carpeta
-        run: ls -la allure-results/git add .github/workflows/master-pipeline.yml
+      - name: 📊 5. Enviar Resultados a Allure
+        if: always()
+        run: |
+          echo "Enviando resultados a Allure Docker..."
+          # Este es un método simple: comprimimos y mandamos por CURL
+          cd allure-results && tar -czf results.tar.gz *
+          curl -X POST "http://localhost:5050/allure-docker-service/send-results?project_id=default" \
+          -H "accept: */*" -H "Content-Type: application/json" \
+          -d "{\"results\": [{\"file_name\": \"results.tar.gz\", \"content_base64\": \"$(base64 -w 0 results.tar.gz)\"}]}"
