@@ -32,25 +32,21 @@ jobs:
           npx newman run tests-postman/smoke-test.json \
           -r allure --reporter-allure-export allure-results || echo "Postman falló"
 
-      - name: 🥋 6. Ejecutar y Diagnosticar Karate
+      - name: 🥋 6. Ejecutar Karate y Extraer Reporte
         run: |
-          # 1. Asegurar que tenemos el JAR
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
 
-          # 2. Ejecutar Karate y capturar TODO el error en un archivo
-          echo "Iniciando ejecución de Karate..."
-          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate-report.json > karate_output.log 2>&1 || echo "Karate terminó con errores"
+          # Ejecutamos Karate
+          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate-base/
           
-          # 3. MOSTRAR EL LOG EN GITHUB (Esto es clave para saber por qué falla)
-          echo "--- LOG DE KARATE ---"
-          cat karate_output.log
-          echo "--- FIN DEL LOG ---"
-
-          # 4. Ver si el archivo se creó realmente
-          echo "Contenido de allure-results despues de Karate:"
-          ls -la allure-results/
+          # TRUCO MAESTRO: Buscamos el JSON real que Karate guardó adentro y lo sacamos afuera
+          # Karate lo guarda como karate-summary-json.txt, lo movemos y renombramos a .json
+          cp allure-results/karate-base/karate-reports/karate-summary-json.txt allure-results/karate-final.json || echo "No se encontró el reporte"
+          
+          echo "Verificando que el archivo existe ahora:"
+          ls -l allure-results/karate-final.json
 
       - name: 📊 7. Unificar y Enviar Todo
         if: always()
@@ -64,8 +60,8 @@ jobs:
           if os.path.exists(base_dir):
               for root, dirs, files in os.walk(base_dir):
                   for file in files:
-                      # Agarramos TODO lo que sea .json (Postman + Karate)
-                      if file.endswith('.json'):
+                      # Ahora sí, pescamos los de Postman y nuestro nuevo karate-final.json
+                      if file.endswith(('.json', '.xml')) and not os.path.isdir(os.path.join(root, file)):
                           file_path = os.path.join(root, file)
                           with open(file_path, 'rb') as f:
                               content = base64.b64encode(f.read()).decode('utf-8')
@@ -75,9 +71,7 @@ jobs:
                               })
 
           if payload['results']:
-              # Limpiamos antes de enviar
               requests.get('http://localhost:5050/allure-docker-service/clean-results?project_id=default')
-              
               url = 'http://localhost:5050/allure-docker-service/send-results?project_id=default'
               r = requests.post(url, json=payload)
               print(f'✅ Enviados {len(payload["results"])} archivos. Status: {r.status_code}')
