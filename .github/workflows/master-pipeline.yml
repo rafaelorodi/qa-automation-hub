@@ -50,14 +50,12 @@ jobs:
           payload = {'results': []}
           base_dir = 'allure-results'
 
-          # Extensiones que Allure Docker Service entiende
-          valid_extensions = ('.json', '.xml', '.txt', '.properties', '.html')
-
           if os.path.exists(base_dir):
-              # os.walk recorre TODO (recursivo)
               for root, dirs, files in os.walk(base_dir):
                   for file in files:
-                      if file.endswith(valid_extensions):
+                      # FILTRO CRÍTICO: Solo enviamos JSONs de resultados o attachments conocidos
+                      # Evitamos enviar .html, .log o .txt basura que rompen Allure
+                      if file.endswith(('-result.json', '-attachment.json', '-attachment.txt', '.karate-json.txt')):
                           file_path = os.path.join(root, file)
                           with open(file_path, 'rb') as f:
                               content = base64.b64encode(f.read()).decode('utf-8')
@@ -67,13 +65,13 @@ jobs:
                               })
 
           if payload['results']:
+              # Limpiamos los resultados anteriores antes de enviar los nuevos (opcional pero recomendado)
+              requests.get('http://localhost:5050/allure-docker-service/clean-results?project_id=default')
+              
               url = 'http://localhost:5050/allure-docker-service/send-results?project_id=default'
               headers = {'Content-Type': 'application/json'}
               r = requests.post(url, data=json.dumps(payload), headers=headers)
-              print(f'🚀 Total archivos enviados: {len(payload["results"])}. Status: {r.status_code}')
+              print(f'✅ Enviados {len(payload["results"])} archivos limpios. Status: {r.status_code}')
           else:
-              print('❌ No se encontraron archivos para enviar.')
+              print('❌ No se encontraron resultados válidos.')
           EOF
-
-      - name: 📂 Ver qué resultados hay
-        run: ls -R allure-results/
