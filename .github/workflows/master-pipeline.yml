@@ -37,9 +37,11 @@ jobs:
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
-          # Generamos el reporte y lo renombramos a .json para que Allure lo reconozca
-          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/
-          mv allure-results/karate-summary-json.txt allure-results/karate-report.json || echo "No se pudo renombrar"
+          # Corremos Karate y le pedimos que guarde el resultado como karate-report.json
+          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate-report.json
+          
+          # Verificamos si el archivo existe (esto saldrá en tu log de GitHub)
+          ls -l allure-results/
 
       - name: 📊 7. Unificar y Enviar Todo
         if: always()
@@ -53,8 +55,8 @@ jobs:
           if os.path.exists(base_dir):
               for root, dirs, files in os.walk(base_dir):
                   for file in files:
-                      # Ahora incluimos explícitamente el nuevo .json de Karate
-                      if file.endswith(('-result.json', '.json')):
+                      # Agarramos TODO lo que sea .json (Postman + Karate)
+                      if file.endswith('.json'):
                           file_path = os.path.join(root, file)
                           with open(file_path, 'rb') as f:
                               content = base64.b64encode(f.read()).decode('utf-8')
@@ -64,10 +66,10 @@ jobs:
                               })
 
           if payload['results']:
-              # Limpiamos para que no queden rastros de los .txt anteriores
+              # Limpiamos antes de enviar
               requests.get('http://localhost:5050/allure-docker-service/clean-results?project_id=default')
               
               url = 'http://localhost:5050/allure-docker-service/send-results?project_id=default'
               r = requests.post(url, json=payload)
-              print(f'✅ Enviados {len(payload["results"])} archivos finales. Status: {r.status_code}')
+              print(f'✅ Enviados {len(payload["results"])} archivos. Status: {r.status_code}')
           EOF
