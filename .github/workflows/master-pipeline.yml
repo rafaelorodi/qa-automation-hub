@@ -48,15 +48,17 @@ jobs:
           import os, base64, requests, json
 
           payload = {'results': []}
-          # Lista de carpetas donde buscar resultados (Newman y Karate)
-          search_dirs = ['allure-results', 'target/karate-reports']
+          base_dir = 'allure-results'
 
-          for d in search_dirs:
-              if os.path.exists(d):
-                  for file in os.listdir(d):
-                      # Buscamos JSONs de Newman y los XML/JSON de Karate
-                      if file.endswith(('.json', '.xml')):
-                          file_path = os.path.join(d, file)
+          # Extensiones que Allure Docker Service entiende
+          valid_extensions = ('.json', '.xml', '.txt', '.properties', '.html')
+
+          if os.path.exists(base_dir):
+              # os.walk recorre TODO (recursivo)
+              for root, dirs, files in os.walk(base_dir):
+                  for file in files:
+                      if file.endswith(valid_extensions):
+                          file_path = os.path.join(root, file)
                           with open(file_path, 'rb') as f:
                               content = base64.b64encode(f.read()).decode('utf-8')
                               payload['results'].append({
@@ -68,9 +70,9 @@ jobs:
               url = 'http://localhost:5050/allure-docker-service/send-results?project_id=default'
               headers = {'Content-Type': 'application/json'}
               r = requests.post(url, data=json.dumps(payload), headers=headers)
-              print(f'Enviados {len(payload["results"])} archivos. Status: {r.status_code}')
+              print(f'🚀 Total archivos enviados: {len(payload["results"])}. Status: {r.status_code}')
           else:
-              print('No se encontraron archivos de resultados.')
+              print('❌ No se encontraron archivos para enviar.')
           EOF
 
       - name: 📂 Ver qué resultados hay
