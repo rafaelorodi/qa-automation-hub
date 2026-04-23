@@ -48,7 +48,7 @@ jobs:
           echo "Verificando que el archivo existe ahora:"
           ls -l allure-results/karate-final.json
 
-      - name: 📊 7. Transformar y Adjuntar Reporte de Karate
+      - name: 📊 7. Transformación Senior (Allure + Logs)
         if: always()
         run: |
           python3 - << 'EOF'
@@ -57,39 +57,39 @@ jobs:
           results_dir = 'allure-results'
           payload = {'results': []}
 
-          # 1. Procesar Postman como siempre
+          # 1. Procesar resultados de Postman
           for file in os.listdir(results_dir):
               if file.endswith('-result.json'):
                   with open(os.path.join(results_dir, file), 'rb') as f:
                       payload['results'].append({'file_name': file, 'content_base64': base64.b64encode(f.read()).decode()})
 
-          # 2. TRANSFORMAR KARATE Y ADJUNTAR EL HTML
-          # Buscamos el HTML real (Karate suele llamarlo karate-summary.html o similar)
-          html_source = 'allure-results/karate-base/karate-reports/karate-summary.html'
-          attachment_name = f"{uuid.uuid4()}-attachment.html"
+          # 2. PROCESAR KARATE (Log Técnico)
+          # Buscamos el log que generamos en el paso anterior
+          log_source = 'karate_output.log'
+          attachment_name = f"{uuid.uuid4()}-log.txt"
           
-          if os.path.exists(html_source):
-              with open(html_source, 'rb') as f:
-                  html_content = base64.b64encode(f.read()).decode()
-                  payload['results'].append({'file_name': attachment_name, 'content_base64': html_content})
+          if os.path.exists(log_source):
+              with open(log_source, 'rb') as f:
+                  log_content = base64.b64encode(f.read()).decode()
+                  payload['results'].append({'file_name': attachment_name, 'content_base64': log_content})
 
-          # Creamos el test de Allure que referencia a ese adjunto
+          # Creamos el resultado de Allure referenciando al Log
           allure_result = {
               "uuid": str(uuid.uuid4()),
-              "historyId": "karate-smoke-test-v2",
-              "fullName": "Karate: Smoke Test API Full Report",
-              "labels": [{"name": "suite", "value": "Karate Framework"}],
-              "name": "Karate Detailed HTML Report",
+              "historyId": "karate-senior-log",
+              "fullName": "Karate: API Transaction Logs",
+              "labels": [{"name": "suite", "value": "Karate Framework"}, {"name": "severity", "value": "critical"}],
+              "name": "Detailed Transaction Log (Debug)",
               "status": "passed",
               "attachments": [
                   {
-                      "name": "Karate Native Report",
+                      "name": "Karate Full Execution Log",
                       "source": attachment_name,
-                      "type": "text/html"
+                      "type": "text/plain"
                   }
               ],
               "start": int(time.time() * 1000),
-              "stop": int(time.time() * 1000) + 1000
+              "stop": int(time.time() * 1000) + 500
           }
           
           payload['results'].append({
@@ -97,8 +97,9 @@ jobs:
               'content_base64': base64.b64encode(json.dumps(allure_result).encode()).decode()
           })
 
+          # 3. Limpiar y Enviar
           if payload['results']:
               requests.get('http://192.168.18.9:5050/allure-docker-service/clean-results?project_id=default')
               requests.post('http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default', json=payload)
-              print("✅ Reporte nativo de Karate adjuntado con éxito.")
+              print("🚀 Pipeline Senior completado: Logs enviados a Allure.")
           EOF
