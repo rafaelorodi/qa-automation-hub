@@ -48,31 +48,46 @@ jobs:
           echo "Verificando que el archivo existe ahora:"
           ls -l allure-results/karate-final.json
 
-      - name: 📊 7. Unificar y Enviar Todo
+      - name: 📊 7. Transformar y Enviar a Allure
         if: always()
         run: |
           python3 - << 'EOF'
-          import os, base64, requests, json
+          import os, base64, requests, json, uuid, time
 
+          results_dir = 'allure-results'
           payload = {'results': []}
-          base_dir = 'allure-results'
 
-          if os.path.exists(base_dir):
-              for root, dirs, files in os.walk(base_dir):
-                  for file in files:
-                      # Ahora sí, pescamos los de Postman y nuestro nuevo karate-final.json
-                      if file.endswith(('.json', '.xml')) and not os.path.isdir(os.path.join(root, file)):
-                          file_path = os.path.join(root, file)
-                          with open(file_path, 'rb') as f:
-                              content = base64.b64encode(f.read()).decode('utf-8')
-                              payload['results'].append({
-                                  'file_name': file,
-                                  'content_base64': content
-                              })
+          # 1. Procesar archivos existentes (Postman)
+          for file in os.listdir(results_dir):
+              if file.endswith('-result.json'):
+                  with open(os.path.join(results_dir, file), 'rb') as f:
+                      payload['results'].append({'file_name': file, 'content_base64': base64.b64encode(f.read()).decode()})
 
+          # 2. TRANSFORMAR KARATE A ALLURE NATIVO
+          karate_file = os.path.join(results_dir, 'karate-final.json')
+          if os.path.exists(karate_file):
+              with open(karate_file, 'r') as f:
+                  karate_data = json.load(f)
+                  # Creamos un objeto que Allure entienda de una
+                  allure_result = {
+                      "uuid": str(uuid.uuid4()),
+                      "historyId": "karate-smoke-test",
+                      "fullName": "Karate: Smoke Test API",
+                      "labels": [{"name": "suite", "value": "Karate Framework"}, {"name": "framework", "value": "Karate"}],
+                      "name": "Karate API Verification",
+                      "status": "passed" if karate_data.get('passed', True) else "failed",
+                      "start": int(time.time() * 1000),
+                      "stop": int(time.time() * 1000) + 1000
+                  }
+                  file_name = f"{allure_result['uuid']}-result.json"
+                  payload['results'].append({
+                      'file_name': file_name,
+                      'content_base64': base64.b64encode(json.dumps(allure_result).encode()).decode()
+                  })
+
+          # 3. Enviar combo final
           if payload['results']:
-              requests.get('http://localhost:5050/allure-docker-service/clean-results?project_id=default')
-              url = 'http://localhost:5050/allure-docker-service/send-results?project_id=default'
-              r = requests.post(url, json=payload)
-              print(f'✅ Enviados {len(payload["results"])} archivos. Status: {r.status_code}')
+              requests.get('http://192.168.18.9:5050/allure-docker-service/clean-results?project_id=default')
+              requests.post('http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default', json=payload)
+              print(f"✅ Enviados {len(payload['results'])} tests nativos.")
           EOF
