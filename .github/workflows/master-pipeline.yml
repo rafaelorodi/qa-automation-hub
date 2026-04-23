@@ -42,23 +42,31 @@ jobs:
       - name: 📊 7. Unificar y Enviar a Allure
         if: always()
         run: |
-          python3 -c "
+          python3 - << 'EOF'
           import os, base64, requests, json
-          
-          # Directorios donde hay resultados
-          # Newman deja .json, Karate deja archivos en target/karate-reports
-          dirs = ['allure-results'] 
-          payload = {'results': []}
 
-          for d in dirs:
+          payload = {'results': []}
+          # Lista de carpetas donde buscar resultados (Newman y Karate)
+          search_dirs = ['allure-results', 'target/karate-reports']
+
+          for d in search_dirs:
               if os.path.exists(d):
                   for file in os.listdir(d):
-                      if file.endswith('.json'):
-                          with open(os.path.join(d, file), 'rb') as f:
+                      # Buscamos JSONs de Newman y los XML/JSON de Karate
+                      if file.endswith(('.json', '.xml')):
+                          file_path = os.path.join(d, file)
+                          with open(file_path, 'rb') as f:
                               content = base64.b64encode(f.read()).decode('utf-8')
-                              payload['results'].append({'file_name': file, 'content_base64': content})
-          
-          allure_url = 'http://localhost:5050/allure-docker-service/send-results?project_id=default'
-          headers = {'Content-Type': 'application/json'}
-          r = requests.post(allure_url, data=json.dumps(payload), headers=headers)
-          print(f'Allure Status: {r.status_code}')
+                              payload['results'].append({
+                                  'file_name': file,
+                                  'content_base64': content
+                              })
+
+          if payload['results']:
+              url = 'http://localhost:5050/allure-docker-service/send-results?project_id=default'
+              headers = {'Content-Type': 'application/json'}
+              r = requests.post(url, data=json.dumps(payload), headers=headers)
+              print(f'Enviados {len(payload["results"])} archivos. Status: {r.status_code}')
+          else:
+              print('No se encontraron archivos de resultados.')
+          EOF
