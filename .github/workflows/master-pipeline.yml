@@ -34,33 +34,40 @@ jobs:
 
       - name: 🥋 6. Ejecutar Karate
         run: |
-          # Obligamos a Karate a soltar el JSON directamente en la carpeta de Allure
+          if [ ! -f karate.jar ]; then
+            curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
+          fi
+          # Generamos el reporte y lo renombramos a .json para que Allure lo reconozca
           java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/
+          mv allure-results/karate-summary-json.txt allure-results/karate-report.json || echo "No se pudo renombrar"
 
-      - name: 📊 7. Envío Masivo a Allure
+      - name: 📊 7. Unificar y Enviar Todo
         if: always()
         run: |
           python3 - << 'EOF'
           import os, base64, requests, json
 
           payload = {'results': []}
-          target_dir = 'allure-results'
+          base_dir = 'allure-results'
 
-          # Limpieza preventiva en el servidor
-          requests.get('http://localhost:5050/allure-docker-service/clean-results?project_id=default')
-
-          if os.path.exists(target_dir):
-              for root, dirs, files in os.walk(target_dir):
+          if os.path.exists(base_dir):
+              for root, dirs, files in os.walk(base_dir):
                   for file in files:
-                      # Agarramos todo lo que parezca un resultado
-                      if file.endswith(('.json', '.xml', '.txt')):
-                          path = os.path.join(root, file)
-                          with open(path, 'rb') as f:
+                      # Ahora incluimos explícitamente el nuevo .json de Karate
+                      if file.endswith(('-result.json', '.json')):
+                          file_path = os.path.join(root, file)
+                          with open(file_path, 'rb') as f:
                               content = base64.b64encode(f.read()).decode('utf-8')
-                              payload['results'].append({'file_name': file, 'content_base64': content})
+                              payload['results'].append({
+                                  'file_name': file,
+                                  'content_base64': content
+                              })
 
           if payload['results']:
+              # Limpiamos para que no queden rastros de los .txt anteriores
+              requests.get('http://localhost:5050/allure-docker-service/clean-results?project_id=default')
+              
               url = 'http://localhost:5050/allure-docker-service/send-results?project_id=default'
               r = requests.post(url, json=payload)
-              print(f'✅ Enviados {len(payload["results"])} archivos. Status: {r.status_code}')
+              print(f'✅ Enviados {len(payload["results"])} archivos finales. Status: {r.status_code}')
           EOF
