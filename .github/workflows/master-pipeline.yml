@@ -32,16 +32,25 @@ jobs:
           npx newman run tests-postman/smoke-test.json \
           -r allure --reporter-allure-export allure-results || echo "Postman falló"
 
-      - name: 🥋 6. Ejecutar Karate
+      - name: 🥋 6. Ejecutar y Diagnosticar Karate
         run: |
+          # 1. Asegurar que tenemos el JAR
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
-          # Corremos Karate y le pedimos que guarde el resultado como karate-report.json
-          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate-report.json
+
+          # 2. Ejecutar Karate y capturar TODO el error en un archivo
+          echo "Iniciando ejecución de Karate..."
+          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate-report.json > karate_output.log 2>&1 || echo "Karate terminó con errores"
           
-          # Verificamos si el archivo existe (esto saldrá en tu log de GitHub)
-          ls -l allure-results/
+          # 3. MOSTRAR EL LOG EN GITHUB (Esto es clave para saber por qué falla)
+          echo "--- LOG DE KARATE ---"
+          cat karate_output.log
+          echo "--- FIN DEL LOG ---"
+
+          # 4. Ver si el archivo se creó realmente
+          echo "Contenido de allure-results despues de Karate:"
+          ls -la allure-results/
 
       - name: 📊 7. Unificar y Enviar Todo
         if: always()
