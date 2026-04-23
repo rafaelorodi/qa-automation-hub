@@ -1,0 +1,36 @@
+name: 🚀 QA Master Pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  postman-api-tests:
+    runs-on: self-hosted
+    
+    steps:
+      - name: 1. Clonar Repositorio
+        uses: actions/checkout@v4
+        
+      - name: 2. Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: 3. Instalar Newman y Allure Reporter
+        run: npm install -g newman newman-reporter-allure
+        
+      - name: 🧪 4. Ejecutar Pruebas de Postman
+        
+        run: newman run tests-postman/smoke-test.json -r allure --reporter-allure-export allure-results
+
+      - name: 📊 5. Enviar Resultados a Allure Docker
+        if: always()
+        
+        run: |
+          echo "Enviando resultados al servidor Allure en el puerto 5050..."
+          # Aquí comprimimos y enviamos vía API (Asegurate que la IP sea la de tu Allure)
+          curl -X POST "http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default" \
+          -H "Content-Type: application/json" \
+          -d "{\"results\": []}" 
+          # Nota: Para un flujo real usaremos un script de carga, pero para probar que el runner funciona, esto basta.
