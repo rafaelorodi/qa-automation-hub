@@ -48,30 +48,34 @@ jobs:
           import os, base64, requests, json
 
           payload = {'results': []}
-          base_dir = 'allure-results'
+          
+          # 1. Buscamos resultados de Postman (están en la raíz de allure-results)
+          postman_dir = 'allure-results'
+          if os.path.exists(postman_dir):
+              for file in os.listdir(postman_dir):
+                  if file.endswith(('-result.json', '-attachment.json', '-attachment.txt')):
+                      with open(os.path.join(postman_dir, file), 'rb') as f:
+                          content = base64.b64encode(f.read()).decode('utf-8')
+                          payload['results'].append({'file_name': file, 'content_base64': content})
 
-          if os.path.exists(base_dir):
-              for root, dirs, files in os.walk(base_dir):
-                  for file in files:
-                      # FILTRO CRÍTICO: Solo enviamos JSONs de resultados o attachments conocidos
-                      # Evitamos enviar .html, .log o .txt basura que rompen Allure
-                      if file.endswith(('-result.json', '-attachment.json', '-attachment.txt', '.karate-json.txt')):
-                          file_path = os.path.join(root, file)
-                          with open(file_path, 'rb') as f:
-                              content = base64.b64encode(f.read()).decode('utf-8')
-                              payload['results'].append({
-                                  'file_name': file,
-                                  'content_base64': content
-                              })
+          # 2. Buscamos resultados de Karate (están en la subcarpeta)
+          karate_dir = 'allure-results/karate-reports'
+          if os.path.exists(karate_dir):
+              for file in os.listdir(karate_dir):
+                  # Karate guarda el JSON importante con extensión .txt o .json
+                  if 'karate-json' in file or file.endswith('.json'):
+                      with open(os.path.join(karate_dir, file), 'rb') as f:
+                          content = base64.b64encode(f.read()).decode('utf-8')
+                          payload['results'].append({'file_name': f'karate-{file}', 'content_base64': content})
 
           if payload['results']:
-              # Limpiamos los resultados anteriores antes de enviar los nuevos (opcional pero recomendado)
+              # Limpiamos para que el nuevo reporte sea el único y tenga todo
               requests.get('http://localhost:5050/allure-docker-service/clean-results?project_id=default')
               
               url = 'http://localhost:5050/allure-docker-service/send-results?project_id=default'
               headers = {'Content-Type': 'application/json'}
               r = requests.post(url, data=json.dumps(payload), headers=headers)
-              print(f'✅ Enviados {len(payload["results"])} archivos limpios. Status: {r.status_code}')
+              print(f'✅ Enviados {len(payload["results"])} archivos en total. Status: {r.status_code}')
           else:
-              print('❌ No se encontraron resultados válidos.')
+              print('❌ No se encontró nada para enviar.')
           EOF
