@@ -29,25 +29,21 @@ jobs:
 
       - name: 🧪 5. Ejecutar Postman
         run: |
+          # Guardamos en una subcarpeta específica
+          mkdir -p allure-results/postman
           npx newman run tests-postman/smoke-test.json \
-          -r allure --reporter-allure-export allure-results || echo "Postman falló"
+          -r allure --reporter-allure-export allure-results/postman || echo "Postman falló"
 
-      - name: 🥋 6. Ejecutar Karate y Preparar Resultados
+      - name: 🥋 6. Ejecutar Karate
         run: |
-          # 1. Descargar Karate si no existe
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
+          # Guardamos en su propia subcarpeta y capturamos el log aparte
+          mkdir -p allure-results/karate
+          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate/ > allure-results/karate_execution.log 2>&1 || echo "Karate falló"
 
-          # 2. Ejecutar y volcar TODO el log técnico a un archivo dentro de allure-results
-          # Usamos > para crear el archivo y 2>&1 para capturar tanto info como errores
-          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate-base/ > allure-results/execution.log 2>&1 || echo "Karate detectó fallos, pero seguimos para reportar"
-          
-          # 3. Verificación de seguridad (opcional, para tu log de GitHub)
-          echo "Contenido generado para Karate:"
-          ls -l allure-results/execution.log
-
-      - name: 📊 7. Unificación Total y Envío
+      - name: 📊 7. Unificador Universal (Sin Dependencias)
         if: always()
         run: |
           python3 - << 'EOF'
@@ -56,56 +52,46 @@ jobs:
           results_dir = 'allure-results'
           payload = {'results': []}
 
-          print(f"--- Escaneando carpeta: {os.path.abspath(results_dir)} ---")
-
-          # 1. Función para codificar y agregar
-          def collect_files(target_path):
-              for root, dirs, files in os.walk(target_path):
+          # 1. Recolectar TODO lo que exista en la carpeta raíz y subcarpetas
+          if os.path.exists(results_dir):
+              for root, dirs, files in os.walk(results_dir):
                   for file in files:
-                      # Agarramos TODO: .json (Postman), .txt (Logs), .properties (Env)
-                      if file.endswith(('.json', '.txt', '.properties', '.html')):
-                          full_path = os.path.join(root, file)
-                          # Evitamos carpetas y archivos vacíos
-                          if os.path.isfile(full_path) and os.path.getsize(full_path) > 0:
-                              with open(full_path, 'rb') as f:
-                                  content = base64.b64encode(f.read()).decode()
-                                  payload['results'].append({'file_name': file, 'content_base64': content})
-                                  print(f"✅ Archivo listo: {file}")
+                      # Pescamos archivos de Postman y los JSON intermedios de Karate
+                      if file.endswith(('.json', '.txt', '.properties')) and not os.path.isdir(os.path.join(root, file)):
+                          with open(os.path.join(root, file), 'rb') as f:
+                              content = base64.b64encode(f.read()).decode()
+                              payload['results'].append({'file_name': file, 'content_base64': content})
 
-          collect_files(results_dir)
-
-          # 2. Generar el test de Karate (para que siempre sume 3 en la torta)
+          # 2. Crear el Test Case "Ancla" para Karate en Allure
+          # Esto asegura que Karate siempre aparezca en la torta aunque su JSON sea rebelde
           karate_uuid = str(uuid.uuid4())
+          log_path = os.path.join(results_dir, 'karate_execution.log')
+          
           allure_karate = {
               "uuid": karate_uuid,
-              "historyId": "karate-test-final",
-              "fullName": "Karate: API Testing",
-              "labels": [{"name": "suite", "value": "Karate Framework"}, {"name": "severity", "value": "critical"}],
-              "name": "Detailed Transaction Log (Debug)",
+              "name": "Karate API Detailed Execution",
+              "historyId": "karate-independent-test",
               "status": "passed",
-              "attachments": [],
-              "start": int(time.time() * 1000),
-              "stop": int(time.time() * 1000) + 500
+              "labels": [{"name": "suite", "value": "Karate Framework"}],
+              "attachments": []
           }
 
-          # Si el log de Karate existe, lo vinculamos como attachment
-          log_path = os.path.join(results_dir, 'execution.log')
           if os.path.exists(log_path):
               log_attachment = f"{karate_uuid}-log.txt"
-              allure_karate["attachments"].append({"name": "Karate Execution Log", "source": log_attachment, "type": "text/plain"})
+              # Agregamos el log a la lista de archivos a enviar
+              with open(log_path, 'rb') as f:
+                  payload['results'].append({'file_name': log_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
+              # Lo vinculamos al test case
+              allure_karate["attachments"].append({"name": "Karate Log", "source": log_attachment, "type": "text/plain"})
 
           payload['results'].append({
               'file_name': f"{karate_uuid}-result.json",
               'content_base64': base64.b64encode(json.dumps(allure_karate).encode()).decode()
           })
 
-          # 3. ENVÍO
+          # 3. Limpiar y Enviar el combo completo
           if payload['results']:
-              # Limpiamos solo si tenemos algo nuevo que mostrar
               requests.get('http://192.168.18.9:5050/allure-docker-service/clean-results?project_id=default')
-              url = 'http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default'
-              r = requests.post(url, json=payload)
-              print(f"🚀 Enviados {len(payload['results'])} archivos. Status: {r.status_code}")
-          else:
-              print("❌ ERROR: No se encontró ningún archivo para enviar.")
+              requests.post('http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default', json=payload)
+              print(f"✅ Pack enviado con {len(payload['results'])} archivos.")
           EOF
