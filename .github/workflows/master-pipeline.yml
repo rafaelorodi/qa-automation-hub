@@ -47,7 +47,7 @@ jobs:
           echo "Contenido generado para Karate:"
           ls -l allure-results/execution.log
 
-      - name: 📊 7. Unificación Total (Postman + Karate + Attachments)
+      - name: 📊 7. Unificación Total y Envío
         if: always()
         run: |
           python3 - << 'EOF'
@@ -56,58 +56,56 @@ jobs:
           results_dir = 'allure-results'
           payload = {'results': []}
 
-          if not os.path.exists(results_dir):
-              print("❌ No se encontró la carpeta allure-results")
-              exit(1)
+          print(f"--- Escaneando carpeta: {os.path.abspath(results_dir)} ---")
 
-          # 1. Función para agregar archivos al payload
-          def add_to_payload(file_path, name):
-              with open(file_path, 'rb') as f:
-                  payload['results'].append({
-                      'file_name': name,
-                      'content_base64': base64.b64encode(f.read()).decode()
-                  })
+          # 1. Función para codificar y agregar
+          def collect_files(target_path):
+              for root, dirs, files in os.walk(target_path):
+                  for file in files:
+                      # Agarramos TODO: .json (Postman), .txt (Logs), .properties (Env)
+                      if file.endswith(('.json', '.txt', '.properties', '.html')):
+                          full_path = os.path.join(root, file)
+                          # Evitamos carpetas y archivos vacíos
+                          if os.path.isfile(full_path) and os.path.getsize(full_path) > 0:
+                              with open(full_path, 'rb') as f:
+                                  content = base64.b64encode(f.read()).decode()
+                                  payload['results'].append({'file_name': file, 'content_base64': content})
+                                  print(f"✅ Archivo listo: {file}")
 
-          # 2. Recorrer la carpeta y pescar TODO lo de Postman (Resultados y Adjuntos)
-          for root, dirs, files in os.walk(results_dir):
-              for file in files:
-                  # Ignoramos carpetas y archivos que no sean resultados o adjuntos
-                  if file.endswith(('.json', '.txt', '.html', '.properties')):
-                      if not os.path.isdir(os.path.join(root, file)):
-                          add_to_payload(os.path.join(root, file), file)
+          collect_files(results_dir)
 
-          # 3. PROCESAR KARATE (Generar el objeto nativo para la torta)
-          log_path = os.path.join(results_dir, 'execution.log')
+          # 2. Generar el test de Karate (para que siempre sume 3 en la torta)
           karate_uuid = str(uuid.uuid4())
-          log_attachment_name = f"{karate_uuid}-log.txt"
-
-          # Si existe el log de Karate, lo metemos
-          if os.path.exists(log_path):
-              add_to_payload(log_path, log_attachment_name)
-
-          # Creamos el JSON de resultado para Karate (Esto asegura que aparezca el test #3)
           allure_karate = {
               "uuid": karate_uuid,
               "historyId": "karate-test-final",
               "fullName": "Karate: API Testing",
               "labels": [{"name": "suite", "value": "Karate Framework"}, {"name": "severity", "value": "critical"}],
-              "name": "Karate Detailed Logs",
+              "name": "Detailed Transaction Log (Debug)",
               "status": "passed",
-              "attachments": [{"name": "Execution Log", "source": log_attachment_name, "type": "text/plain"}],
+              "attachments": [],
               "start": int(time.time() * 1000),
               "stop": int(time.time() * 1000) + 500
           }
-          
+
+          # Si el log de Karate existe, lo vinculamos como attachment
+          log_path = os.path.join(results_dir, 'execution.log')
+          if os.path.exists(log_path):
+              log_attachment = f"{karate_uuid}-log.txt"
+              allure_karate["attachments"].append({"name": "Karate Execution Log", "source": log_attachment, "type": "text/plain"})
+
           payload['results'].append({
               'file_name': f"{karate_uuid}-result.json",
               'content_base64': base64.b64encode(json.dumps(allure_karate).encode()).decode()
           })
 
-          # 4. ENVÍO FINAL
+          # 3. ENVÍO
           if payload['results']:
-              # Limpiamos todo lo anterior en el servidor
+              # Limpiamos solo si tenemos algo nuevo que mostrar
               requests.get('http://192.168.18.9:5050/allure-docker-service/clean-results?project_id=default')
-              # Enviamos el nuevo pack completo
-              r = requests.post('http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default', json=payload)
-              print(f"✅ Éxito: {len(payload['results'])} archivos enviados (Postman + Karate). Status: {r.status_code}")
+              url = 'http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default'
+              r = requests.post(url, json=payload)
+              print(f"🚀 Enviados {len(payload['results'])} archivos. Status: {r.status_code}")
+          else:
+              print("❌ ERROR: No se encontró ningún archivo para enviar.")
           EOF
