@@ -36,6 +36,10 @@ test.describe('Inicio de Sesión', () => {
     const dashboardTitle = page.getByTestId('dashboard-title');
     await expect(dashboardTitle).toBeVisible();
     
-    await page.waitForTimeout(1000); 
+    await page.waitForTimeout(2000); 
+    
+    // ESTO ES LO QUE ARREGLA EL VIDEO:
+    await page.context().close(); 
+    await page.video()?.path(); // Forzamos a que Playwright espere a que el video se guarde en disco
   });
 });

@@ -22,8 +22,13 @@ jobs:
           
       - name: 📦 4. Instalar Herramientas
         run: |
-          # Agregamos @playwright/test y playwright a la lista de instalación
+          # Instalamos FFmpeg para que Playwright pueda grabar videos
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          
+          # Instalamos las dependencias de Node
           npm install newman newman-reporter-allure allure-playwright @playwright/test playwright
+          
+          # Descargamos Karate si no existe
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
