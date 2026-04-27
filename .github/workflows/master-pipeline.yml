@@ -43,10 +43,11 @@ jobs:
 
       - name: 🎭 7. Ejecutar Playwright Tests
         run: |
-          # Aseguramos permisos y usamos npx para instalar los navegadores
+          # 1. Instalación de dependencias del navegador usando npx
           npx playwright install --with-deps chromium
           
-          # Ejecutamos con npx para evitar errores de binarios bloqueados
+          # 2. Ejecución de tests usando npx para evitar errores de permisos
+          # El reportero 'allure-playwright' enviará los datos a allure-results
           npx playwright test --reporter=line,allure-playwright || echo "Playwright falló"
 
       - name: 🚀 8. Ejecutar Pruebas de Carga (JMeter)
