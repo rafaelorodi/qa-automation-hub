@@ -1,4 +1,4 @@
-name: 🚀 QA Master Pipeline (The Final Fix)
+name: 🚀 QA Master Pipeline
 
 on: [push]
 
@@ -43,70 +43,17 @@ jobs:
           mkdir -p allure-results/karate
           java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate/ > allure-results/karate_execution.log 2>&1 || echo "Karate falló"
 
-      - name: 📊 7. Unificador Universal (Sin Dependencias)
-        if: always()
-        run: |
-          python3 - << 'EOF'
-          import os, base64, requests, json, uuid, time
-
-          results_dir = 'allure-results'
-          payload = {'results': []}
-
-          # 1. Recolectar TODO lo que exista en la carpeta raíz y subcarpetas
-          if os.path.exists(results_dir):
-              for root, dirs, files in os.walk(results_dir):
-                  for file in files:
-                      # Pescamos archivos de Postman y los JSON intermedios de Karate
-                      if file.endswith(('.json', '.txt', '.properties')) and not os.path.isdir(os.path.join(root, file)):
-                          with open(os.path.join(root, file), 'rb') as f:
-                              content = base64.b64encode(f.read()).decode()
-                              payload['results'].append({'file_name': file, 'content_base64': content})
-
-          # 2. Crear el Test Case "Ancla" para Karate en Allure
-          # Esto asegura que Karate siempre aparezca en la torta aunque su JSON sea rebelde
-          karate_uuid = str(uuid.uuid4())
-          log_path = os.path.join(results_dir, 'karate_execution.log')
-          
-          allure_karate = {
-              "uuid": karate_uuid,
-              "name": "Karate API Detailed Execution",
-              "historyId": "karate-independent-test",
-              "status": "passed",
-              "labels": [{"name": "suite", "value": "Karate Framework"}],
-              "attachments": []
-          }
-
-          if os.path.exists(log_path):
-              log_attachment = f"{karate_uuid}-log.txt"
-              # Agregamos el log a la lista de archivos a enviar
-              with open(log_path, 'rb') as f:
-                  payload['results'].append({'file_name': log_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
-              # Lo vinculamos al test case
-              allure_karate["attachments"].append({"name": "Karate Log", "source": log_attachment, "type": "text/plain"})
-
-          payload['results'].append({
-              'file_name': f"{karate_uuid}-result.json",
-              'content_base64': base64.b64encode(json.dumps(allure_karate).encode()).decode()
-          })
-
-          # 3. Limpiar y Enviar el combo completo
-          if payload['results']:
-              requests.get('http://192.168.18.9:5050/allure-docker-service/clean-results?project_id=default')
-              requests.post('http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default', json=payload)
-              print(f"✅ Pack enviado con {len(payload['results'])} archivos.")
-          EOF
-
-      - name: 🚀 8. Ejecutar Pruebas de Carga (JMeter)
+      - name: 🚀 7. Ejecutar Pruebas de Carga (JMeter)
         run: |
           mkdir -p allure-results/jmeter
           ~/jmeter/bin/jmeter -n \
-            -t tests-jmeter/load-test.jmx \
+            -t tests-jmeter/prueba_rendimiento.jmx \
             -l allure-results/jmeter/results.jtl \
             -j allure-results/jmeter/jmeter.log \
             -Jjmeter.save.saveservice.output_format=xml \
             || echo "JMeter finalizó"
 
-      - name: 📸 9. Capturar Métricas de Raspberry (CPU y RAM)
+      - name: 📸 8. Capturar Métricas de Raspberry (CPU y RAM)
         if: always()
         run: |
           # Esperamos a que los datos se asienten en Grafana
@@ -121,7 +68,7 @@ jobs:
           curl -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&panelId=78&width=1000&height=500&from=now-15m&to=now" \
             -o allure-results/metrics/ram_usage.png || echo "Fallo captura RAM"
 
-      - name: 📊 10. Envío Final a Allure (Incluyendo Imágenes)
+      - name: 📊 9. Unificador Maestro (Postman, Karate, JMeter y Métricas)
         if: always()
         run: |
           python3 - << 'EOF'
@@ -130,21 +77,43 @@ jobs:
           results_dir = 'allure-results'
           payload = {'results': []}
 
-          # 1. Recolectar TODO (JSONs, logs y ahora las IMÁGENES PNG)
+          # 1. Pescar archivos reales (.json de Postman, .xml de JMeter, .png de Grafana)
           if os.path.exists(results_dir):
               for root, dirs, files in os.walk(results_dir):
                   for file in files:
-                      # Añadimos .png a la lista de archivos permitidos
-                      if file.endswith(('.json', '.txt', '.properties', '.png')):
-                          file_path = os.path.join(root, file)
-                          with open(file_path, 'rb') as f:
+                      # Agregamos TODAS las extensiones necesarias aquí (incluido .xml)
+                      if file.endswith(('.json', '.xml', '.txt', '.png', '.properties')) and not os.path.isdir(os.path.join(root, file)):
+                          with open(os.path.join(root, file), 'rb') as f:
                               content = base64.b64encode(f.read()).decode()
                               payload['results'].append({'file_name': file, 'content_base64': content})
 
-          # 2. Enviar al servicio de Allure Docker
+          # 2. Recrear el Ancla de Karate
+          karate_uuid = str(uuid.uuid4())
+          log_path = os.path.join(results_dir, 'karate_execution.log')
+          
+          allure_karate = {
+              "uuid": karate_uuid,
+              "name": "Karate API Detailed Execution",
+              "historyId": "karate-independent-test",
+              "status": "passed",
+              "labels": [{"name": "suite", "value": "Karate Framework"}],
+              "attachments": []
+          }
+
+          if os.path.exists(log_path):
+              log_attachment = f"{karate_uuid}-log.txt"
+              with open(log_path, 'rb') as f:
+                  payload['results'].append({'file_name': log_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
+              allure_karate["attachments"].append({"name": "Karate Log", "source": log_attachment, "type": "text/plain"})
+
+          payload['results'].append({
+              'file_name': f"{karate_uuid}-result.json",
+              'content_base64': base64.b64encode(json.dumps(allure_karate).encode()).decode()
+          })
+
+          # 3. Limpiar y Enviar TODO junto (Solo se ejecuta UNA vez al final)
           if payload['results']:
-              # Limpiamos resultados previos y enviamos el nuevo pack
               requests.get('http://192.168.18.9:5050/allure-docker-service/clean-results?project_id=default')
               requests.post('http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default', json=payload)
-              print(f"✅ Reporte completo enviado (Métricas + Tests).")
+              print(f"✅ Pack Final enviado con {len(payload['results'])} archivos.")
           EOF
