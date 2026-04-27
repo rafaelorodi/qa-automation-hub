@@ -1,19 +1,26 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  // Carpeta donde tenés tus archivos de prueba (.spec.ts)
-  testDir: './tests-playwright', 
+  testDir: './tests-playwright',
   
-  /* Reportero de Allure - ESTO ES LO QUE NECESITAMOS */
+  fullyParallel: true,
+  
+  // Simplificado: Evita el error de sintaxis con "process"
+  forbidOnly: false, 
+  retries: 1,        
+  workers: 1,
+
   reporter: [
-    ['list'], // Para ver el progreso en la consola
+    ['list'], 
     ['allure-playwright', { outputFolder: 'allure-results' }]
   ],
 
   use: {
-    // Para que si falla, te saque una foto de la pantalla automáticamente
-    screenshot: 'only-on-failure',
+    // Ajustado: 127.0.0.1 es más estricto y seguro que localhost para la red
+    baseURL: 'http://127.0.0.1:5173',
+    
     trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
   },
 
   projects: [
