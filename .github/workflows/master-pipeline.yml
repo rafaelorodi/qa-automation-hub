@@ -22,7 +22,7 @@ jobs:
           
       - name: 📦 4. Instalar Herramientas
         run: |
-          npm install newman newman-reporter-allure
+          npm install newman newman-reporter-allure allure-playwright
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
@@ -41,7 +41,14 @@ jobs:
           mkdir -p allure-results/karate
           java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate/ > allure-results/karate_execution.log 2>&1 || echo "Karate falló"
 
-      - name: 🚀 7. Ejecutar Pruebas de Carga (JMeter)
+      - name: 🎭 7. Ejecutar Playwright Tests
+        run: |
+          # Instalamos los navegadores necesarios (headless)
+          npx playwright install --with-deps chromium
+          # Ejecutamos los tests (los resultados irán a allure-results por tu config)
+          npx playwright test --reporter=line,allure-playwright || echo "Playwright falló"
+
+      - name: 🚀 8. Ejecutar Pruebas de Carga (JMeter)
         run: |
           mkdir -p allure-results/jmeter
           ~/jmeter/bin/jmeter -n \
@@ -51,24 +58,19 @@ jobs:
             -Jjmeter.save.saveservice.output_format=xml \
             || echo "JMeter finalizó"
 
-      - name: 📸 8. Capturar Métricas de Raspberry (CPU y RAM)
+      - name: 📸 9. Capturar Métricas de Raspberry (CPU y RAM)
         if: always()
         run: |
-          # Esperamos 15 segundos DESPUÉS de que JMeter termine para que Grafana dibuje el pico
           sleep 15
           mkdir -p allure-results/metrics
-          
-          # Capturamos CPU (El link exacto del Panel 77 que me pediste)
           curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
             -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=now-1h&to=now&panelId=77&width=1200&height=600" \
             -o allure-results/metrics/cpu_usage.png || echo "Fallo captura CPU"
-            
-          # Capturamos RAM (Mantenemos el panel 78 con las mismas medidas)
           curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
             -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=now-1h&to=now&panelId=78&width=1200&height=600" \
             -o allure-results/metrics/ram_usage.png || echo "Fallo captura RAM"
 
-      - name: 📊 9. Unificador Maestro (Postman, Karate, JMeter y Métricas)
+      - name: 📊 10. Unificador Maestro (Postman, Karate, Playwright, JMeter y Métricas)
         if: always()
         run: |
           python3 - << 'EOF'
@@ -77,20 +79,19 @@ jobs:
           results_dir = 'allure-results'
           payload = {'results': []}
 
-          # 1. Pescar archivos de Postman y Karate
+          # 1. Pescar TODOS los archivos (incluyendo los nuevos de Playwright)
           if os.path.exists(results_dir):
               for root, dirs, files in os.walk(results_dir):
                   for file in files:
-                      # Ignoramos png y jtl porque los subiremos a mano
-                      if file.endswith(('.json', '.xml', '.txt', '.properties')) and not os.path.isdir(os.path.join(root, file)):
+                      # Playwright genera archivos -result.json y archivos de attachments (png/txt)
+                      if file.endswith(('.json', '.xml', '.txt', '.properties', '.png', '.jpg')) and not os.path.isdir(os.path.join(root, file)):
                           with open(os.path.join(root, file), 'rb') as f:
                               content = base64.b64encode(f.read()).decode()
                               payload['results'].append({'file_name': file, 'content_base64': content})
 
-          # 2. Recrear el Ancla de Karate
+          # 2. Recrear el Ancla de Karate (mismo código que ya tenías)
           karate_uuid = str(uuid.uuid4())
           log_path = os.path.join(results_dir, 'karate_execution.log')
-          
           allure_karate = {
               "uuid": karate_uuid,
               "name": "Karate API Detailed Execution",
@@ -99,19 +100,14 @@ jobs:
               "labels": [{"name": "suite", "value": "Karate Framework"}],
               "attachments": []
           }
-
           if os.path.exists(log_path):
               log_attachment = f"{karate_uuid}-log.txt"
               with open(log_path, 'rb') as f:
                   payload['results'].append({'file_name': log_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
               allure_karate["attachments"].append({"name": "Karate Log", "source": log_attachment, "type": "text/plain"})
+          payload['results'].append({'file_name': f"{karate_uuid}-result.json", 'content_base64': base64.b64encode(json.dumps(allure_karate).encode()).decode()})
 
-          payload['results'].append({
-              'file_name': f"{karate_uuid}-result.json",
-              'content_base64': base64.b64encode(json.dumps(allure_karate).encode()).decode()
-          })
-
-          # 3. CREAR ANCLA PARA PERFORMANCE Y MÉTRICAS
+          # 3. Ancla para Performance y Métricas (mismo código que ya tenías)
           perf_uuid = str(uuid.uuid4())
           allure_perf = {
               "uuid": perf_uuid,
@@ -121,36 +117,28 @@ jobs:
               "labels": [{"name": "suite", "value": "Performance Testing"}],
               "attachments": []
           }
-
-          # Adjuntar archivo de JMeter (.jtl tratado como xml)
           jmeter_path = os.path.join(results_dir, 'jmeter', 'results.jtl')
           if os.path.exists(jmeter_path):
-              jmeter_attachment = f"{perf_uuid}-jmeter.xml"
+              j_att = f"{perf_uuid}-jmeter.xml"
               with open(jmeter_path, 'rb') as f:
-                  payload['results'].append({'file_name': jmeter_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
-              allure_perf["attachments"].append({"name": "JMeter Results (XML)", "source": jmeter_attachment, "type": "text/xml"})
+                  payload['results'].append({'file_name': j_att, 'content_base64': base64.b64encode(f.read()).decode()})
+              allure_perf["attachments"].append({"name": "JMeter Results (XML)", "source": j_att, "type": "text/xml"})
+          
+          cpu_p = os.path.join(results_dir, 'metrics', 'cpu_usage.png')
+          if os.path.exists(cpu_p):
+              c_att = f"{perf_uuid}-cpu.png"
+              with open(cpu_p, 'rb') as f:
+                  payload['results'].append({'file_name': c_att, 'content_base64': base64.b64encode(f.read()).decode()})
+              allure_perf["attachments"].append({"name": "CPU Usage (Grafana)", "source": c_att, "type": "image/png"})
 
-          # Adjuntar Imagen CPU
-          cpu_path = os.path.join(results_dir, 'metrics', 'cpu_usage.png')
-          if os.path.exists(cpu_path):
-              cpu_attachment = f"{perf_uuid}-cpu.png"
-              with open(cpu_path, 'rb') as f:
-                  payload['results'].append({'file_name': cpu_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
-              allure_perf["attachments"].append({"name": "CPU Usage (Grafana)", "source": cpu_attachment, "type": "image/png"})
+          ram_p = os.path.join(results_dir, 'metrics', 'ram_usage.png')
+          if os.path.exists(ram_p):
+              r_att = f"{perf_uuid}-ram.png"
+              with open(ram_p, 'rb') as f:
+                  payload['results'].append({'file_name': r_att, 'content_base64': base64.b64encode(f.read()).decode()})
+              allure_perf["attachments"].append({"name": "RAM Usage (Grafana)", "source": r_att, "type": "image/png"})
 
-          # Adjuntar Imagen RAM
-          ram_path = os.path.join(results_dir, 'metrics', 'ram_usage.png')
-          if os.path.exists(ram_path):
-              ram_attachment = f"{perf_uuid}-ram.png"
-              with open(ram_path, 'rb') as f:
-                  payload['results'].append({'file_name': ram_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
-              allure_perf["attachments"].append({"name": "RAM Usage (Grafana)", "source": ram_attachment, "type": "image/png"})
-
-          # Guardar el ancla de Performance
-          payload['results'].append({
-              'file_name': f"{perf_uuid}-result.json",
-              'content_base64': base64.b64encode(json.dumps(allure_perf).encode()).decode()
-          })
+          payload['results'].append({'file_name': f"{perf_uuid}-result.json", 'content_base64': base64.b64encode(json.dumps(allure_perf).encode()).decode()})
 
           # 4. Limpiar y Enviar TODO junto
           if payload['results']:
