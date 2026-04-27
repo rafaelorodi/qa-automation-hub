@@ -17,7 +17,7 @@ export default defineConfig({
 
   use: {
     // Ajustado: 127.0.0.1 es más estricto y seguro que localhost para la red
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: 'http://192.168.18.9:5173',
     
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
