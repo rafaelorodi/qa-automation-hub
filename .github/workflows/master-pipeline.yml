@@ -54,17 +54,18 @@ jobs:
       - name: 📸 8. Capturar Métricas de Raspberry (CPU y RAM)
         if: always()
         run: |
-          sleep 10
+          # Esperamos 15 segundos DESPUÉS de que JMeter termine para que Grafana dibuje el pico
+          sleep 15
           mkdir -p allure-results/metrics
           
-          # Capturamos CPU (Con acceso autorizado)
+          # Capturamos CPU (El link exacto del Panel 77 que me pediste)
           curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
-            -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&panelId=20&width=1000&height=500&from=now-15m&to=now" \
+            -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=now-1h&to=now&panelId=77&width=1200&height=600" \
             -o allure-results/metrics/cpu_usage.png || echo "Fallo captura CPU"
             
-          # Capturamos RAM (Con acceso autorizado)
+          # Capturamos RAM (Mantenemos el panel 78 con las mismas medidas)
           curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
-            -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&panelId=78&width=1000&height=500&from=now-15m&to=now" \
+            -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=now-1h&to=now&panelId=78&width=1200&height=600" \
             -o allure-results/metrics/ram_usage.png || echo "Fallo captura RAM"
 
       - name: 📊 9. Unificador Maestro (Postman, Karate, JMeter y Métricas)
