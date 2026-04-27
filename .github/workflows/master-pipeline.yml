@@ -22,7 +22,8 @@ jobs:
           
       - name: 📦 4. Instalar Herramientas
         run: |
-          npm install newman newman-reporter-allure allure-playwright
+          # Agregamos @playwright/test y playwright a la lista de instalación
+          npm install newman newman-reporter-allure allure-playwright @playwright/test playwright
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
