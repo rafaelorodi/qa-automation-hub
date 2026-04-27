@@ -90,17 +90,18 @@ jobs:
           results_dir = 'allure-results'
           payload = {'results': []}
 
-          # 1. Pescar TODOS los archivos (incluyendo los nuevos de Playwright)
+          # 1. Pescar TODOS los archivos (Agregamos .webm y .zip)
           if os.path.exists(results_dir):
               for root, dirs, files in os.walk(results_dir):
                   for file in files:
-                      # Playwright genera archivos -result.json y archivos de attachments (png/txt)
-                      if file.endswith(('.json', '.xml', '.txt', '.properties', '.png', '.jpg')) and not os.path.isdir(os.path.join(root, file)):
+                      # AGREGAMOS .webm (videos) y .zip (trazas) a la lista de abajo
+                      allowed_exts = ('.json', '.xml', '.txt', '.properties', '.png', '.jpg', '.webm', '.zip')
+                      if file.endswith(allowed_exts) and not os.path.isdir(os.path.join(root, file)):
                           with open(os.path.join(root, file), 'rb') as f:
                               content = base64.b64encode(f.read()).decode()
                               payload['results'].append({'file_name': file, 'content_base64': content})
 
-          # 2. Recrear el Ancla de Karate (mismo código que ya tenías)
+          # 2. Recrear el Ancla de Karate
           karate_uuid = str(uuid.uuid4())
           log_path = os.path.join(results_dir, 'karate_execution.log')
           allure_karate = {
@@ -118,7 +119,7 @@ jobs:
               allure_karate["attachments"].append({"name": "Karate Log", "source": log_attachment, "type": "text/plain"})
           payload['results'].append({'file_name': f"{karate_uuid}-result.json", 'content_base64': base64.b64encode(json.dumps(allure_karate).encode()).decode()})
 
-          # 3. Ancla para Performance y Métricas (mismo código que ya tenías)
+          # 3. Ancla para Performance y Métricas
           perf_uuid = str(uuid.uuid4())
           allure_perf = {
               "uuid": perf_uuid,
