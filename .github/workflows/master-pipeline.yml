@@ -43,9 +43,10 @@ jobs:
 
       - name: 🎭 7. Ejecutar Playwright Tests
         run: |
-          # Instalamos los navegadores necesarios (headless)
+          # Aseguramos permisos y usamos npx para instalar los navegadores
           npx playwright install --with-deps chromium
-          # Ejecutamos los tests (los resultados irán a allure-results por tu config)
+          
+          # Ejecutamos con npx para evitar errores de binarios bloqueados
           npx playwright test --reporter=line,allure-playwright || echo "Playwright falló"
 
       - name: 🚀 8. Ejecutar Pruebas de Carga (JMeter)
