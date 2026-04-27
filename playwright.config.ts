@@ -20,7 +20,8 @@ export default defineConfig({
     baseURL: 'http://192.168.18.9:5173',
     
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    screenshot: 'on',
+    video: 'on'
   },
 
   projects: [
