@@ -1,4 +1,4 @@
-name: 🚀 QA Master Pipeline
+name: 🚀 QA Master Pipeline (The Final Fix)
 
 on: [push]
 
@@ -29,7 +29,6 @@ jobs:
 
       - name: 🧪 5. Ejecutar Postman
         run: |
-          # Guardamos en una subcarpeta específica
           mkdir -p allure-results/postman
           npx newman run tests-postman/smoke-test.json \
           -r allure --reporter-allure-export allure-results/postman || echo "Postman falló"
@@ -39,7 +38,6 @@ jobs:
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
-          # Guardamos en su propia subcarpeta y capturamos el log aparte
           mkdir -p allure-results/karate
           java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate/ > allure-results/karate_execution.log 2>&1 || echo "Karate falló"
 
@@ -56,15 +54,12 @@ jobs:
       - name: 📸 8. Capturar Métricas de Raspberry (CPU y RAM)
         if: always()
         run: |
-          # Esperamos a que los datos se asienten en Grafana
           sleep 10
           mkdir -p allure-results/metrics
           
-          # Capturamos CPU (Panel 20)
           curl -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&panelId=20&width=1000&height=500&from=now-15m&to=now" \
             -o allure-results/metrics/cpu_usage.png || echo "Fallo captura CPU"
             
-          # Capturamos RAM (Panel 78)
           curl -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&panelId=78&width=1000&height=500&from=now-15m&to=now" \
             -o allure-results/metrics/ram_usage.png || echo "Fallo captura RAM"
 
@@ -77,12 +72,12 @@ jobs:
           results_dir = 'allure-results'
           payload = {'results': []}
 
-          # 1. Pescar archivos reales (.json de Postman, .xml de JMeter, .png de Grafana)
+          # 1. Pescar archivos de Postman y Karate
           if os.path.exists(results_dir):
               for root, dirs, files in os.walk(results_dir):
                   for file in files:
-                      # Agregamos TODAS las extensiones necesarias aquí (incluido .xml)
-                      if file.endswith(('.json', '.xml', '.txt', '.png', '.properties')) and not os.path.isdir(os.path.join(root, file)):
+                      # Ignoramos png y jtl porque los subiremos a mano
+                      if file.endswith(('.json', '.xml', '.txt', '.properties')) and not os.path.isdir(os.path.join(root, file)):
                           with open(os.path.join(root, file), 'rb') as f:
                               content = base64.b64encode(f.read()).decode()
                               payload['results'].append({'file_name': file, 'content_base64': content})
@@ -111,7 +106,48 @@ jobs:
               'content_base64': base64.b64encode(json.dumps(allure_karate).encode()).decode()
           })
 
-          # 3. Limpiar y Enviar TODO junto (Solo se ejecuta UNA vez al final)
+          # 3. CREAR ANCLA PARA PERFORMANCE Y MÉTRICAS
+          perf_uuid = str(uuid.uuid4())
+          allure_perf = {
+              "uuid": perf_uuid,
+              "name": "Resultados JMeter y Métricas de Raspberry",
+              "historyId": "performance-metrics-test",
+              "status": "passed",
+              "labels": [{"name": "suite", "value": "Performance Testing"}],
+              "attachments": []
+          }
+
+          # Adjuntar archivo de JMeter (.jtl tratado como xml)
+          jmeter_path = os.path.join(results_dir, 'jmeter', 'results.jtl')
+          if os.path.exists(jmeter_path):
+              jmeter_attachment = f"{perf_uuid}-jmeter.xml"
+              with open(jmeter_path, 'rb') as f:
+                  payload['results'].append({'file_name': jmeter_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
+              allure_perf["attachments"].append({"name": "JMeter Results (XML)", "source": jmeter_attachment, "type": "text/xml"})
+
+          # Adjuntar Imagen CPU
+          cpu_path = os.path.join(results_dir, 'metrics', 'cpu_usage.png')
+          if os.path.exists(cpu_path):
+              cpu_attachment = f"{perf_uuid}-cpu.png"
+              with open(cpu_path, 'rb') as f:
+                  payload['results'].append({'file_name': cpu_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
+              allure_perf["attachments"].append({"name": "CPU Usage (Grafana)", "source": cpu_attachment, "type": "image/png"})
+
+          # Adjuntar Imagen RAM
+          ram_path = os.path.join(results_dir, 'metrics', 'ram_usage.png')
+          if os.path.exists(ram_path):
+              ram_attachment = f"{perf_uuid}-ram.png"
+              with open(ram_path, 'rb') as f:
+                  payload['results'].append({'file_name': ram_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
+              allure_perf["attachments"].append({"name": "RAM Usage (Grafana)", "source": ram_attachment, "type": "image/png"})
+
+          # Guardar el ancla de Performance
+          payload['results'].append({
+              'file_name': f"{perf_uuid}-result.json",
+              'content_base64': base64.b64encode(json.dumps(allure_perf).encode()).decode()
+          })
+
+          # 4. Limpiar y Enviar TODO junto
           if payload['results']:
               requests.get('http://192.168.18.9:5050/allure-docker-service/clean-results?project_id=default')
               requests.post('http://192.168.18.9:5050/allure-docker-service/send-results?project_id=default', json=payload)
