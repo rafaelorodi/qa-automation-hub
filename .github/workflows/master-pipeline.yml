@@ -57,10 +57,14 @@ jobs:
           sleep 10
           mkdir -p allure-results/metrics
           
-          curl -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&panelId=20&width=1000&height=500&from=now-15m&to=now" \
+          # Capturamos CPU (Con acceso autorizado)
+          curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
+            -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&panelId=20&width=1000&height=500&from=now-15m&to=now" \
             -o allure-results/metrics/cpu_usage.png || echo "Fallo captura CPU"
             
-          curl -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&panelId=78&width=1000&height=500&from=now-15m&to=now" \
+          # Capturamos RAM (Con acceso autorizado)
+          curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
+            -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&panelId=78&width=1000&height=500&from=now-15m&to=now" \
             -o allure-results/metrics/ram_usage.png || echo "Fallo captura RAM"
 
       - name: 📊 9. Unificador Maestro (Postman, Karate, JMeter y Métricas)
