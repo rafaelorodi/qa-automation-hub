@@ -13,7 +13,7 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: 'http://192.168.18.9:5180/',
+    baseURL: 'http://192.168.18.9:8090/',
     screenshot: 'on',
     video: {
       mode: 'on',
