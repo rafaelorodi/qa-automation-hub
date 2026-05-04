@@ -15,9 +15,9 @@
     "test:karate:hu003": "npx karate tests-karate/HU003_Orders"
   },
   "devDependencies": {
-    "@playwright/test": "^latest",
+    "@playwright/test": "latest",
     "allure-playwright": "^3.7.1",
-    "karate": "^latest",
-    "dotenv": "^latest"
+    "karate": "latest",
+    "dotenv": "latest"
   }
 }
