@@ -4,15 +4,9 @@
   "description": "QA Automation Hub - Pruebas para Raspberry Pi",
   "scripts": {
     "test:playwright": "playwright test tests-playwright",
-    "test:playwright:hu": "playwright test",
-    "test:karate": "npx karate tests-karate/smoke-test.feature",
-    "test:local:all": "npm run test:playwright:hu && npm run test:karate",
-    "test:local:hu001": "playwright test tests-playwright/HU001_Login",
-    "test:local:hu002": "playwright test tests-playwright/HU002_Products",
-    "test:local:hu003": "playwright test tests-playwright/HU003_Orders",
-    "test:karate:hu001": "npx karate tests-karate/HU001_Login",
-    "test:karate:hu002": "npx karate tests-karate/HU002_Products",
-    "test:karate:hu003": "npx karate tests-karate/HU003_Orders"
+    "test:karate": "java -jar karate.jar tests-karate",
+    "test:postman": "newman run tests-postman",
+    "test:jmeter": "jmeter -n -t tests-jmeter"
   },
   "devDependencies": {
     "@playwright/test": "latest",
