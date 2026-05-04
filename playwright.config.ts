@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: false,
   retries: 1,
-  workers: 1, 
+  workers: 1,
 
   reporter: [
     ['list'],
@@ -13,7 +13,7 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: 'https://stock.rafaelrodi.com/',
+    baseURL: 'http://192.168.18.9:5173',
     screenshot: 'on',
     video: {
       mode: 'on',
