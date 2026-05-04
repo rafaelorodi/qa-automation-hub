@@ -13,7 +13,7 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: 'http://192.168.18.9:5173',
+    baseURL: 'https://stock.rafaelrodi.com/',
     screenshot: 'on',
     video: {
       mode: 'on',
