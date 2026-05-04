@@ -1,6 +1,24 @@
 name: 🚀 QA Master Pipeline (The Final Fix)
 
-on: [push]
+on:
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: 'Herramienta a ejecutar'
+        required: true
+        default: 'Sincronizar Todas'
+        type: choice
+        options:
+          - Playwright
+          - Karate
+          - Postman
+          - JMeter
+          - Sincronizar Todas
+      test_case:
+        description: 'Caso de Prueba'
+        required: true
+        default: 'inicio_sesion'
+        type: string
 
 jobs:
   qa-automation:
@@ -34,20 +52,23 @@ jobs:
           fi
 
       - name: 🧪 5. Ejecutar Postman
+        if: ${{ github.event.inputs.tool == 'Postman' || github.event.inputs.tool == 'Sincronizar Todas' }}
         run: |
           mkdir -p allure-results/postman
-          npx newman run tests-postman/smoke-test.json \
+          npx newman run tests-postman/${{ github.event.inputs.test_case }}.json \
           -r allure --reporter-allure-export allure-results/postman || echo "Postman falló"
 
       - name: 🥋 6. Ejecutar Karate
+        if: ${{ github.event.inputs.tool == 'Karate' || github.event.inputs.tool == 'Sincronizar Todas' }}
         run: |
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
           mkdir -p allure-results/karate
-          java -jar karate.jar tests-karate/smoke-test.feature -o allure-results/karate/ > allure-results/karate_execution.log 2>&1 || echo "Karate falló"
+          java -jar karate.jar tests-karate/${{ github.event.inputs.test_case }}.feature -o allure-results/karate/ > allure-results/karate_execution.log 2>&1 || echo "Karate falló"
 
       - name: 🎭 7. Ejecutar Playwright Tests
+        if: ${{ github.event.inputs.tool == 'Playwright' || github.event.inputs.tool == 'Sincronizar Todas' }}
         run: |
           # 1. Le damos permisos de ejecución obligatorios al binario de Playwright
           chmod -R 755 node_modules/.bin/
@@ -57,13 +78,14 @@ jobs:
           npx playwright install --with-deps chromium
           
           # 3. Ejecutamos los tests mandando el reporte a Allure
-          npx playwright test --reporter=line,allure-playwright || echo "Playwright falló"
+          npx playwright test tests-playwright/${{ github.event.inputs.test_case }}.spec.ts --reporter=line,allure-playwright || echo "Playwright falló"
 
       - name: 🚀 8. Ejecutar Pruebas de Carga (JMeter)
+        if: ${{ github.event.inputs.tool == 'JMeter' || github.event.inputs.tool == 'Sincronizar Todas' }}
         run: |
           mkdir -p allure-results/jmeter
           ~/jmeter/bin/jmeter -n \
-            -t tests-jmeter/prueba_rendimiento.jmx \
+            -t tests-jmeter/${{ github.event.inputs.test_case }}.jmx \
             -l allure-results/jmeter/results.jtl \
             -j allure-results/jmeter/jmeter.log \
             -Jjmeter.save.saveservice.output_format=xml \
