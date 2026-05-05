@@ -1,0 +1,12 @@
+name: Sync repo on Pi
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync:
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest changes
+        run: cd /home/rafa/qa-automation-hub && git pull
