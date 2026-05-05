@@ -40,13 +40,28 @@ jobs:
           
       - name: 📦 4. Instalar Herramientas
         run: |
-          # Instalamos FFmpeg para que Playwright pueda grabar videos
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-          
-          # Instalamos las dependencias de Node
-          npm install newman newman-reporter-allure allure-playwright @playwright/test playwright
-          
-          # Descargamos Karate si no existe
+          # FFmpeg (solo si no está)
+          if ! command -v ffmpeg &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y ffmpeg
+          fi
+
+          # Node packages: solo instalar lo que falta (evita OOM en la Pi)
+          install_if_missing() {
+            pkg=$1
+            if [ ! -d "node_modules/$pkg" ]; then
+              echo "Instalando $pkg..."
+              NODE_OPTIONS="--max-old-space-size=256" npm install "$pkg" --no-audit --no-fund --prefer-offline
+            else
+              echo "$pkg ya instalado, saltando."
+            fi
+          }
+          install_if_missing newman
+          install_if_missing newman-reporter-allure
+          install_if_missing allure-playwright
+          install_if_missing @playwright/test
+          install_if_missing playwright
+
+          # Karate (solo si no existe)
           if [ ! -f karate.jar ]; then
             curl -L https://github.com/karatelabs/karate/releases/download/v1.4.1/karate-1.4.1.jar -o karate.jar
           fi
