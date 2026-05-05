@@ -25,7 +25,7 @@ test.describe('Inicio de Sesión', () => {
 
   test('debería permitir el login con credenciales válidas', async ({ page }) => {
     const username = 'admin';
-    const password = '123';
+    const password = 'admin123';
 
     await page.fill('#login-user', username);
     await page.fill('#login-pass', password);
