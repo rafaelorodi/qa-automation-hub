@@ -123,14 +123,19 @@ jobs:
       - name: 📸 9. Capturar Métricas de Raspberry (CPU y RAM)
         if: always() && (github.event.inputs.tool == 'JMeter' || github.event.inputs.tool == 'Sincronizar Todas')
         run: |
-          sleep 15
-          mkdir -p allure-results/metrics
-          curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
-            -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=now-1h&to=now&panelId=77&width=1200&height=600" \
-            -o allure-results/metrics/cpu_usage.png || echo "Fallo captura CPU"
-          curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
-            -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=now-1h&to=now&panelId=78&width=1200&height=600" \
-            -o allure-results/metrics/ram_usage.png || echo "Fallo captura RAM"
+          FILE="tests-jmeter/${{ github.event.inputs.test_case }}.jmx"
+          if [ -f "$FILE" ]; then
+            sleep 15
+            mkdir -p allure-results/metrics
+            curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
+              -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=now-1h&to=now&panelId=77&width=1200&height=600" \
+              -o allure-results/metrics/cpu_usage.png || echo "Fallo captura CPU"
+            curl -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
+              -L "http://192.168.18.9:3000/render/d-solo/rYdddlPWk/node-exporter-full?orgId=1&from=now-1h&to=now&panelId=78&width=1200&height=600" \
+              -o allure-results/metrics/ram_usage.png || echo "Fallo captura RAM"
+          else
+            echo "JMeter no corrió para este test, saltando capturas de Grafana."
+          fi
 
       - name: 📊 10. Unificador Maestro (Postman, Karate, Playwright, JMeter y Métricas)
         if: always()
@@ -153,10 +158,10 @@ jobs:
                               content = base64.b64encode(f.read()).decode()
                               payload['results'].append({'file_name': file, 'content_base64': content})
 
-          # 2. Recrear el Ancla de Karate
-          if tool_input in ['Karate', 'Sincronizar Todas']:
+          # 2. Recrear el Ancla de Karate (solo si realmente corrió)
+          karate_log = os.path.join(results_dir, 'karate_execution.log')
+          if tool_input in ['Karate', 'Sincronizar Todas'] and os.path.exists(karate_log):
               karate_uuid = str(uuid.uuid4())
-              log_path = os.path.join(results_dir, 'karate_execution.log')
               allure_karate = {
                   "uuid": karate_uuid,
                   "name": "Karate API Detailed Execution",
@@ -165,23 +170,23 @@ jobs:
                   "labels": [{"name": "suite", "value": "Karate Framework"}],
                   "attachments": []
               }
-              if os.path.exists(log_path):
-                  log_attachment = f"{karate_uuid}-log.txt"
-                  with open(log_path, 'rb') as f:
-                      payload['results'].append({'file_name': log_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
-                  allure_karate["attachments"].append({"name": "Karate Log", "source": log_attachment, "type": "text/plain"})
-              
+              log_attachment = f"{karate_uuid}-log.txt"
+              with open(karate_log, 'rb') as f:
+                  payload['results'].append({'file_name': log_attachment, 'content_base64': base64.b64encode(f.read()).decode()})
+              allure_karate["attachments"].append({"name": "Karate Log", "source": log_attachment, "type": "text/plain"})
+
               karate_html = os.path.join(results_dir, 'karate', 'karate-reports', 'karate-summary.html')
               if os.path.exists(karate_html):
                   h_att = f"{karate_uuid}-summary.html"
                   with open(karate_html, 'rb') as f:
                       payload['results'].append({'file_name': h_att, 'content_base64': base64.b64encode(f.read()).decode()})
                   allure_karate["attachments"].append({"name": "Karate HTML Summary", "source": h_att, "type": "text/html"})
-                  
+
               payload['results'].append({'file_name': f"{karate_uuid}-result.json", 'content_base64': base64.b64encode(json.dumps(allure_karate).encode()).decode()})
 
-          # 3. Ancla para Performance y Métricas
-          if tool_input in ['JMeter', 'Sincronizar Todas']:
+          # 3. Ancla para Performance y Métricas (solo si realmente corrió)
+          jmeter_jtl = os.path.join(results_dir, 'jmeter', 'results.jtl')
+          if tool_input in ['JMeter', 'Sincronizar Todas'] and os.path.exists(jmeter_jtl):
               perf_uuid = str(uuid.uuid4())
               allure_perf = {
                   "uuid": perf_uuid,
@@ -191,12 +196,10 @@ jobs:
                   "labels": [{"name": "suite", "value": "Performance Testing"}],
                   "attachments": []
               }
-              jmeter_path = os.path.join(results_dir, 'jmeter', 'results.jtl')
-              if os.path.exists(jmeter_path):
-                  j_att = f"{perf_uuid}-jmeter.xml"
-                  with open(jmeter_path, 'rb') as f:
-                      payload['results'].append({'file_name': j_att, 'content_base64': base64.b64encode(f.read()).decode()})
-                  allure_perf["attachments"].append({"name": "JMeter Results (XML)", "source": j_att, "type": "text/xml"})
+              j_att = f"{perf_uuid}-jmeter.xml"
+              with open(jmeter_jtl, 'rb') as f:
+                  payload['results'].append({'file_name': j_att, 'content_base64': base64.b64encode(f.read()).decode()})
+              allure_perf["attachments"].append({"name": "JMeter Results (XML)", "source": j_att, "type": "text/xml"})
               
               cpu_p = os.path.join(results_dir, 'metrics', 'cpu_usage.png')
               if os.path.exists(cpu_p):
